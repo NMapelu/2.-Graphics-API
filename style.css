@@ -1,0 +1,17 @@
+body {
+    margin: 0;
+    padding: 0;
+    background-color: #dfe6e9;
+    font-family: Arial, sans-serif;
+    text-align: center;
+}
+
+h1 {
+    margin-top: 20px;
+}
+
+canvas {
+    background-color: #87ceeb;
+    border: 3px solid black;
+    margin-top: 20px;
+}
