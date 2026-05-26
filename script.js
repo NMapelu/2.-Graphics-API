@@ -22,15 +22,15 @@ const trafficLight = {
     y: 70
 };
 
-// Two-way Multi-Lane Cars Data Structure with dynamic physics boundaries
+// Two-way Multi-Lane Cars Data Structure with uniform, fixed speeds
 const cars = [
-    // Top Lane Base Y = 210 (Moving Right to Left -> Speed is negative)
-    { id: 1, x: 950,  y: 210, w: 55, h: 28, baseSpeed: -2.0, speed: -2.0, color: "#d63031", lane: "top" },
-    { id: 2, x: 1250, y: 210, w: 55, h: 28, baseSpeed: -3.5, speed: -3.5, color: "#0984e3", lane: "top" },
+    // Top Lane Base Y = 210 (Moving Right to Left -> Speed is negative and identical)
+    { id: 1, x: 950,  y: 210, w: 55, h: 28, baseSpeed: -2.5, speed: -2.5, color: "#d63031", lane: "top" },
+    { id: 2, x: 1350, y: 210, w: 55, h: 28, baseSpeed: -2.5, speed: -2.5, color: "#0984e3", lane: "top" },
 
-    // Bottom Lane Base Y = 310 (Moving Left to Right -> Speed is positive)
-    { id: 3, x: -100, y: 310, w: 55, h: 28, baseSpeed: 2.2,  speed: 2.2,  color: "#e17055", lane: "bottom" },
-    { id: 4, x: -400, y: 310, w: 55, h: 28, baseSpeed: 3.8,  speed: 3.8,  color: "#e84393", lane: "bottom" }
+    // Bottom Lane Base Y = 310 (Moving Left to Right -> Speed is positive and identical)
+    { id: 3, x: -100, y: 310, w: 55, h: 28, baseSpeed: 2.5,  speed: 2.5,  color: "#e17055", lane: "bottom" },
+    { id: 4, x: -500, y: 310, w: 55, h: 28, baseSpeed: 2.5,  speed: 2.5,  color: "#e84393", lane: "bottom" }
 ];
 
 // Pedestrian State Data
@@ -61,7 +61,7 @@ function updateSimulation() {
         trafficLight.timer = 0;
     }
 
-    // B. Handle Car Movement Dynamics, Separation, and Safe Speed Matching
+    // B. Handle Car Movement Dynamics and Queue Control
     updateCars();
 
     // C. Pedestrian Route updates
@@ -80,10 +80,9 @@ function updateSimulation() {
     }
 }
 
-// Sub-logic for Car Spacing and Queue Control (No Overtakes)
+// Sub-logic for Car Spacing and Queue Control (No Overtakes, Uniform Speeds)
 function updateCars() {
     cars.forEach((car) => {
-        // Calculate exact bounding boxes for spatial accuracy regardless of direction
         const carLeft = car.x;
         const carRight = car.x + car.w;
 
@@ -98,9 +97,9 @@ function updateCars() {
             return; // Stay fully stopped at the light
         }
 
-        // --- 2. CAR PROXIMITY DETECTION & SPEED MATCHING ---
+        // --- 2. CAR PROXIMITY DETECTION & QUEUE MATCHING ---
         let carAhead = null;
-        let minGap = 75; // Safe bumper-to-bumper distance target
+        let minGap = 85; // Safe spacing cushion
 
         cars.forEach((other) => {
             if (car.id === other.id || car.lane !== other.lane) return;
@@ -109,43 +108,34 @@ function updateCars() {
             const otherRight = other.x + other.w;
 
             if (car.lane === "top") {
-                // Top lane moves LEFT: An 'other' car is directly ahead if its X value is lower
                 if (otherLeft < carLeft && (carLeft - otherRight) < minGap && (carLeft - otherRight) > -10) {
                     carAhead = other;
                 }
             } else {
-                // Bottom lane moves RIGHT: An 'other' car is directly ahead if its X value is higher
                 if (otherRight > carRight && (otherLeft - carRight) < minGap && (otherLeft - carRight) > -10) {
                     carAhead = other;
                 }
             }
         });
 
-        // --- 3. APPLY SPEED ADJUSTMENTS BASED ON PATH CONDITIONS ---
-        if (carAhead) {
-            if (carAhead.speed === 0) {
-                // Leading car is stopped at a red light or in a queue -> Full stop
-                car.speed = 0;
-                return;
-            } else {
-                // Leading car is just slower -> Match its speed safely to maintain order
-                car.speed = carAhead.speed;
-            }
+        // --- 3. APPLY SPEED CODES ---
+        if (carAhead && carAhead.speed === 0) {
+            car.speed = 0; // Stop behind the car ahead at red lights
+            return;
         } else {
-            // Path is totally clear -> Free to drive at designated maximum base speed
-            car.speed = car.baseSpeed;
+            car.speed = car.baseSpeed; // Drive normally at uniform pace
         }
 
         // --- 4. EXECUTE MOVEMENT VECTOR CODES ---
         car.x += car.speed;
 
-        // --- 5. RECYCLE OFF-SCREEN ELEMENTS ---
+        // --- 5. RECYCLE OFF-SCREEN ELEMENTS MANUALLY (Preserving Order) ---
         if (car.lane === "top" && car.x < -80) {
-            car.x = 950 + Math.random() * 150;
+            car.x = 950; // Respawns cleanly at a fixed point to prevent random overlapping
             car.speed = car.baseSpeed;
         } 
         if (car.lane === "bottom" && car.x > 980) {
-            car.x = -100 - Math.random() * 150;
+            car.x = -100; // Respawns cleanly at a fixed point to prevent random overlapping
             car.speed = car.baseSpeed;
         }
     });
@@ -156,7 +146,6 @@ function updateCars() {
    2. GEOMETRY STAGE (Defining vertices, shapes, coordinates, and primitives)
    ========================================================================= */
 
-// Define Road Geometric Layout Structures
 function buildRoadGeometry() {
     // Main Horizontal asphalt body
     ctx.fillStyle = "#3d3d3d";
@@ -177,7 +166,6 @@ function buildRoadGeometry() {
     }
 }
 
-// Generate Vehicle Outlines and Wheel Placements
 function buildCarGeometry(car) {
     // Chassis Frame Primitive
     ctx.fillStyle = car.color;
@@ -199,13 +187,12 @@ function buildCarGeometry(car) {
     ctx.fillRect(car.x + car.w - 18, car.y + car.h, 10, 4);
 }
 
-// Define UI Button Geometry & Canvas Interactions
 function buildButtonGeometry(btn) {
     const isHovered = mouseX >= btn.x && mouseX <= btn.x + btn.w &&
                       mouseY >= btn.y && mouseY <= btn.y + btn.h;
 
     if (btn.label === "START" && isStarted) {
-        ctx.fillStyle = "#b2bec3"; // De-emphasize once running
+        ctx.fillStyle = "#b2bec3"; 
     } else {
         ctx.fillStyle = isHovered ? "#00cec9" : "#0984e3";
     }
@@ -235,7 +222,6 @@ function buildButtonGeometry(btn) {
    ========================================================================= */
 
 function rasterizeFrame() {
-    // Clear screen pixels across the canvas bounding box viewport frame
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
     // Rasterize structural background layout
@@ -290,14 +276,13 @@ function rasterizeFrame() {
 
 function coreExecutionLoop() {
     if (isRunning) {
-        updateSimulation(); // Application logic processing step
+        updateSimulation(); 
     }
-    rasterizeFrame();      // Paint pipeline buffer onto HTML UI layer
+    rasterizeFrame();      
 
     frameId = requestAnimationFrame(coreExecutionLoop);
 }
 
-// Mouse movement tracking for real-time hover calculations
 canvas.addEventListener("mousemove", (event) => {
     const rect = canvas.getBoundingClientRect();
     mouseX = event.clientX - rect.left;
@@ -308,7 +293,6 @@ canvas.addEventListener("mousemove", (event) => {
     }
 });
 
-// Click Interaction Handler mapping canvas coordinates to controls
 canvas.addEventListener("click", () => {
     // 1. Clicked START button
     if (mouseX >= startBtnGraphic.x && mouseX <= startBtnGraphic.x + startBtnGraphic.w &&
