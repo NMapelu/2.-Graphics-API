@@ -1,109 +1,102 @@
 const canvas = document.getElementById("trafficCanvas");
 const ctx = canvas.getContext("2d");
 
-// Traffic light details
-const trafficLight = {
-    x: 420,
-    y: 150,
-    width: 40,
-    height: 120,
-    state: "green",
-    counter: 0
-};
+const button = document.getElementById("controlBtn");
 
-// Cars used in the simulation
-const cars = [
-    {
-        x: 0,
-        y: 220,
-        width: 60,
-        height: 30,
-        color: "red",
-        speed: 2
-    },
-    {
-        x: -180,
-        y: 300,
-        width: 60,
-        height: 30,
-        color: "blue",
-        speed: 3
-    }
-];
-
+// Controls simulation state
+let running = false;
+let animationId = null;
 
 /*
-    APPLICATION STAGE
-
-    This is where the logic happens.
-    Things like movement, traffic light timing,
-    and animation updates are controlled here.
+    Traffic light is now placed beside the road
 */
+const trafficLight = {
+    x: 780,
+    y: 120,
+    width: 30,
+    height: 100,
+    state: "green",
+    timer: 0
+};
 
-// Changes the traffic light after some time
+/*
+    Cars now move RIGHT → LEFT (like real roads depending on lane direction)
+*/
+const cars = [
+    { x: 900, y: 220, width: 60, height: 30, color: "red", speed: 2 },
+    { x: 1100, y: 300, width: 60, height: 30, color: "blue", speed: 3 }
+];
+
+/* ---------------------------
+   APPLICATION STAGE
+----------------------------*/
+
+// Toggle start / pause / resume
+button.addEventListener("click", () => {
+
+    running = !running;
+
+    if (running) {
+        button.textContent = "Pause";
+        animate();
+    } else {
+        button.textContent = "Resume";
+        cancelAnimationFrame(animationId);
+    }
+});
+
+// Traffic light switching logic
 function updateTrafficLight() {
 
-    trafficLight.counter++;
+    trafficLight.timer++;
 
-    // Switch light every few seconds
-    if (trafficLight.counter > 300) {
+    if (trafficLight.timer > 300) {
 
-        if (trafficLight.state === "green") {
-            trafficLight.state = "red";
-        } else {
-            trafficLight.state = "green";
-        }
+        trafficLight.state =
+            trafficLight.state === "green" ? "red" : "green";
 
-        trafficLight.counter = 0;
+        trafficLight.timer = 0;
     }
 }
 
-// Controls car movement
+// Move cars (now right to left)
 function updateCars() {
 
     cars.forEach(car => {
 
-        // Cars stop when the light is red
+        // Stop at red light zone
         if (
             trafficLight.state === "red" &&
-            car.x + car.width > 350 &&
-            car.x < 420
+            car.x < 650 &&
+            car.x > 520
         ) {
-
-            // Car waits here
-
-        } else {
-            car.x += car.speed;
+            return; // car waits
         }
 
-        // Bring the car back after leaving the screen
-        if (car.x > canvas.width) {
-            car.x = -100;
+        car.x -= car.speed;
+
+        // reset position when it leaves screen
+        if (car.x < -100) {
+            car.x = canvas.width + Math.random() * 200;
         }
     });
 }
 
+/* ---------------------------
+   GEOMETRY STAGE
+----------------------------*/
 
-/*
-    GEOMETRY STAGE
-
-    In this section, the shapes and positions
-    of objects are defined before drawing.
-*/
-
-// Draws the road and lane markings
+// Road
 function drawRoad() {
 
-    // Main road
     ctx.fillStyle = "#555";
     ctx.fillRect(0, 180, canvas.width, 180);
 
-    // White lane divider
+    // lane markings
     ctx.strokeStyle = "white";
     ctx.lineWidth = 4;
 
     for (let i = 0; i < canvas.width; i += 40) {
-
         ctx.beginPath();
         ctx.moveTo(i, 270);
         ctx.lineTo(i + 20, 270);
@@ -111,53 +104,34 @@ function drawRoad() {
     }
 }
 
-// Draw the traffic light
+// Traffic light (now beside road)
 function drawTrafficLight() {
 
-    // Pole/body
     ctx.fillStyle = "black";
-    ctx.fillRect(
-        trafficLight.x,
-        trafficLight.y,
-        trafficLight.width,
-        trafficLight.height
-    );
+    ctx.fillRect(trafficLight.x, trafficLight.y, trafficLight.width, trafficLight.height);
 
-    // Red light
+    // red light
     ctx.beginPath();
-
-    if (trafficLight.state === "red") {
-        ctx.fillStyle = "red";
-    } else {
-        ctx.fillStyle = "#550000";
-    }
-
-    ctx.arc(440, 180, 12, 0, Math.PI * 2);
+    ctx.fillStyle = trafficLight.state === "red" ? "red" : "#550000";
+    ctx.arc(795, 150, 10, 0, Math.PI * 2);
     ctx.fill();
 
-    // Green light
+    // green light
     ctx.beginPath();
-
-    if (trafficLight.state === "green") {
-        ctx.fillStyle = "lime";
-    } else {
-        ctx.fillStyle = "#003300";
-    }
-
-    ctx.arc(440, 240, 12, 0, Math.PI * 2);
+    ctx.fillStyle = trafficLight.state === "green" ? "lime" : "#003300";
+    ctx.arc(795, 200, 10, 0, Math.PI * 2);
     ctx.fill();
 }
 
-// Draw all cars
+// Cars
 function drawCars() {
 
     cars.forEach(car => {
 
-        // Car body
         ctx.fillStyle = car.color;
         ctx.fillRect(car.x, car.y, car.width, car.height);
 
-        // Wheels
+        // wheels
         ctx.fillStyle = "black";
 
         ctx.beginPath();
@@ -170,36 +144,29 @@ function drawCars() {
     });
 }
 
+/* ---------------------------
+   RASTERIZATION STAGE
+----------------------------*/
 
-/*
-    RASTERIZATION STAGE
+// Draw everything on screen
+function render() {
 
-    This is where everything is finally drawn
-    onto the canvas pixel by pixel.
-*/
-
-function renderScene() {
-
-    // Clears previous frame
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    // Draw everything again
     drawRoad();
     drawTrafficLight();
     drawCars();
 }
 
-
-// Animation loop
+// Main loop
 function animate() {
 
     updateTrafficLight();
     updateCars();
+    render();
 
-    renderScene();
-
-    requestAnimationFrame(animate);
+    animationId = requestAnimationFrame(animate);
 }
 
-// Start the simulation
-animate();
+// initial frame
+render();
