@@ -7,14 +7,25 @@ body {
     padding: 20px;
 }
 
-h2 {
+/* New Fun & Colorful Title Style */
+.fun-title {
+    font-family: 'Fredoka', sans-serif;
+    font-size: 2.8rem;
     margin-bottom: 20px;
+    letter-spacing: 2px;
+    
+    /* Creates a beautiful multi-color gradient text */
+    background: linear-gradient(45deg, #ff7675, #ffeaa7, #55efc4, #0984e3);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    
+    /* Gives it a crisp pop-out background shadow */
+    filter: drop-shadow(3px 3px 0px rgba(0, 0, 0, 0.4));
 }
 
 canvas {
-    background: #6ab04c; /* Green grass landscape */
     border: 4px solid #1e272e;
-    box-shadow: 0 10px 20px rgba(0,0,0,0.3);
-    border-radius: 4px;
+    box-shadow: 0 10px 20px rgba(0,0,0,0.5);
+    border-radius: 12px; /* Smoothed corners to match the fun vibe */
     cursor: default;
 }
