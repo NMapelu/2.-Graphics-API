@@ -16,6 +16,7 @@ body {
     
     /* Creates a beautiful multi-color gradient text */
     background: linear-gradient(45deg, #ff7675, #ffeaa7, #55efc4, #0984e3);
+    background-clip: text;
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     

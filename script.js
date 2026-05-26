@@ -62,23 +62,7 @@ function updateSimulation() {
     }
 
     // B. Handle Car Movement Dynamics across opposite lanes
-    cars.forEach(car => {
-        if (car.lane === "top") {
-            // Stop line before the intersection zone when Light is Red
-            const nearIntersection = car.x > 530 && car.x < 570;
-            if (trafficLight.state === "red" && nearIntersection) return; 
-
-            car.x += car.speed; // Move Left
-            if (car.x < -80) car.x = 950 + Math.random() * 150; // Recycle object
-        } else {
-            // Stop line before the intersection zone when Light is Red
-            const nearIntersection = car.x < 350 && car.x > 310;
-            if (trafficLight.state === "red" && nearIntersection) return;
-
-            car.x += car.speed; // Move Right
-            if (car.x > 980) car.x = -100 - Math.random() * 150; // Recycle object
-        }
-    });
+    updateCars();
 
     // C. Pedestrian Intelligence Route updates
     if (trafficLight.state === "red") {
@@ -96,6 +80,60 @@ function updateSimulation() {
     }
 }
 
+// Sub-logic for Car Spacing and Movement (Rear-end pileup prevention)
+function updateCars() {
+    cars.forEach((car, index) => {
+        // 1. Check for the traffic light intersection stop line
+        if (car.lane === "top") {
+            const nearIntersection = car.x > 530 && car.x < 570;
+            if (trafficLight.state === "red" && nearIntersection) return; 
+        } else {
+            const nearIntersection = car.x < 350 && car.x > 310;
+            if (trafficLight.state === "red" && nearIntersection) return;
+        }
+
+        // 2. Proximity Check: Look ahead to prevent rear-end collisions
+        let carAheadDetected = false;
+        const safetyDistance = 75; // Minimum pixel gap to keep between vehicles
+
+        for (let i = 0; i < cars.length; i++) {
+            if (i === index) continue; // Skip checking against yourself
+            
+            const otherCar = cars[i];
+
+            // Only evaluate cars sharing the exact same lane
+            if (car.lane === otherCar.lane) {
+                if (car.lane === "top") {
+                    // Top lane moves LEFT. Is otherCar to our left and too close?
+                    if (otherCar.x < car.x && (car.x - otherCar.x) < safetyDistance) {
+                        carAheadDetected = true;
+                        break;
+                    }
+                } else {
+                    // Bottom lane moves RIGHT. Is otherCar to our right and too close?
+                    if (otherCar.x > car.x && (otherCar.x - car.x) < safetyDistance) {
+                        carAheadDetected = true;
+                        break;
+                    }
+                }
+            }
+        }
+
+        // If there's a car stopped in front, hold position
+        if (carAheadDetected) return;
+
+        // 3. If the path is entirely clear, proceed forward
+        car.x += car.speed;
+
+        // Recycle off-screen objects back into the loop pool
+        if (car.lane === "top") {
+            if (car.x < -80) car.x = 950 + Math.random() * 150;
+        } else {
+            if (car.x > 980) car.x = -100 - Math.random() * 150;
+        }
+    });
+}
+
 
 /* =========================================================================
    2. GEOMETRY STAGE (Defining vertices, shapes, coordinates, and primitives)
@@ -110,7 +148,7 @@ function buildRoadGeometry() {
     // Cross-secting Vertical Intersection Road
     ctx.fillRect(390, 0, 160, 500);
 
-    // Double Continuous Yellow center separation strip (Geometry generation)
+    // Double Continuous Yellow center separation strip
     ctx.fillStyle = "#f1c40f";
     ctx.fillRect(0, 272, 900, 3);
     ctx.fillRect(0, 279, 900, 3);
