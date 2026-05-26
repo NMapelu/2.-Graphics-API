@@ -11,7 +11,7 @@ let mouseX = 0;
 let mouseY = 0;
 
 /* =========================================================================
-   1. APPLICATION STAGE (CPU: Simulation Logic, System Data, & Objects)
+   1. APPLICATION STAGE (CPU: CPU Simulation Logic, System Data, & Objects)
    ========================================================================= */
 
 // Traffic Light Core States
@@ -22,15 +22,15 @@ const trafficLight = {
     y: 70
 };
 
-// Two-way Multi-Lane Cars Data Structure with uniform, fixed speeds
+// Two-way Multi-Lane Cars Data Structure
 const cars = [
-    // Top Lane Base Y = 210 (Moving Right to Left -> Speed is negative and identical)
-    { id: 1, x: 950,  y: 210, w: 55, h: 28, baseSpeed: -2.5, speed: -2.5, color: "#d63031", lane: "top" },
-    { id: 2, x: 1350, y: 210, w: 55, h: 28, baseSpeed: -2.5, speed: -2.5, color: "#0984e3", lane: "top" },
+    // Top Lane: Moving East to West (Right to Left -> Speed is negative)
+    { x: 950, y: 210, w: 55, h: 28, speed: -2.5, color: "#d63031", lane: "top" },
+    { x: 1250, y: 210, w: 55, h: 28, speed: -3.2, color: "#0984e3", lane: "top" },
 
-    // Bottom Lane Base Y = 310 (Moving Left to Right -> Speed is positive and identical)
-    { id: 3, x: -100, y: 310, w: 55, h: 28, baseSpeed: 2.5,  speed: 2.5,  color: "#e17055", lane: "bottom" },
-    { id: 4, x: -500, y: 310, w: 55, h: 28, baseSpeed: 2.5,  speed: 2.5,  color: "#e84393", lane: "bottom" }
+    // Bottom Lane: Moving West to East (Left to Right -> Speed is positive)
+    { x: -100, y: 310, w: 55, h: 28, speed: 2.8, color: "#e17055", lane: "bottom" },
+    { x: -400, y: 310, w: 55, h: 28, speed: 2.0, color: "#e84393", lane: "bottom" }
 ];
 
 // Pedestrian State Data
@@ -61,10 +61,10 @@ function updateSimulation() {
         trafficLight.timer = 0;
     }
 
-    // B. Handle Car Movement Dynamics and Queue Control
+    // B. Handle Car Movement Dynamics across opposite lanes
     updateCars();
 
-    // C. Pedestrian Route updates
+    // C. Pedestrian Intelligence Route updates
     if (trafficLight.state === "red") {
         pedestrian.isCrossing = true;
         pedestrian.y -= pedestrian.speed; // Cross Northward safely
@@ -80,63 +80,56 @@ function updateSimulation() {
     }
 }
 
-// Sub-logic for Car Spacing and Queue Control (No Overtakes, Uniform Speeds)
+// Sub-logic for Car Spacing and Movement (Rear-end pileup prevention)
 function updateCars() {
-    cars.forEach((car) => {
-        const carLeft = car.x;
-        const carRight = car.x + car.w;
-
-        // --- 1. INTERSECTION LIGHT CHECK ---
-        let atStopLine = false;
-        if (trafficLight.state === "red") {
-            if (car.lane === "top" && carRight > 540 && carLeft < 570) atStopLine = true;
-            if (car.lane === "bottom" && carLeft < 360 && carRight > 330) atStopLine = true;
-        }
-        if (atStopLine) {
-            car.speed = 0;
-            return; // Stay fully stopped at the light
+    cars.forEach((car, index) => {
+        // 1. Check for the traffic light intersection stop line
+        if (car.lane === "top") {
+            const nearIntersection = car.x > 530 && car.x < 570;
+            if (trafficLight.state === "red" && nearIntersection) return; 
+        } else {
+            const nearIntersection = car.x < 350 && car.x > 310;
+            if (trafficLight.state === "red" && nearIntersection) return;
         }
 
-        // --- 2. CAR PROXIMITY DETECTION & QUEUE MATCHING ---
-        let carAhead = null;
-        let minGap = 85; // Safe spacing cushion
+        // 2. Proximity Check: Look ahead to prevent rear-end collisions
+        let carAheadDetected = false;
+        const safetyDistance = 75; // Minimum pixel gap to keep between vehicles
 
-        cars.forEach((other) => {
-            if (car.id === other.id || car.lane !== other.lane) return;
+        for (let i = 0; i < cars.length; i++) {
+            if (i === index) continue; // Skip checking against yourself
+            
+            const otherCar = cars[i];
 
-            const otherLeft = other.x;
-            const otherRight = other.x + other.w;
-
-            if (car.lane === "top") {
-                if (otherLeft < carLeft && (carLeft - otherRight) < minGap && (carLeft - otherRight) > -10) {
-                    carAhead = other;
-                }
-            } else {
-                if (otherRight > carRight && (otherLeft - carRight) < minGap && (otherLeft - carRight) > -10) {
-                    carAhead = other;
+            // Only evaluate cars sharing the exact same lane
+            if (car.lane === otherCar.lane) {
+                if (car.lane === "top") {
+                    // Top lane moves LEFT. Is otherCar to our left and too close?
+                    if (otherCar.x < car.x && (car.x - otherCar.x) < safetyDistance) {
+                        carAheadDetected = true;
+                        break;
+                    }
+                } else {
+                    // Bottom lane moves RIGHT. Is otherCar to our right and too close?
+                    if (otherCar.x > car.x && (otherCar.x - car.x) < safetyDistance) {
+                        carAheadDetected = true;
+                        break;
+                    }
                 }
             }
-        });
-
-        // --- 3. APPLY SPEED CODES ---
-        if (carAhead && carAhead.speed === 0) {
-            car.speed = 0; // Stop behind the car ahead at red lights
-            return;
-        } else {
-            car.speed = car.baseSpeed; // Drive normally at uniform pace
         }
 
-        // --- 4. EXECUTE MOVEMENT VECTOR CODES ---
+        // If there's a car stopped in front, hold position
+        if (carAheadDetected) return;
+
+        // 3. If the path is entirely clear, proceed forward
         car.x += car.speed;
 
-        // --- 5. RECYCLE OFF-SCREEN ELEMENTS MANUALLY (Preserving Order) ---
-        if (car.lane === "top" && car.x < -80) {
-            car.x = 950; // Respawns cleanly at a fixed point to prevent random overlapping
-            car.speed = car.baseSpeed;
-        } 
-        if (car.lane === "bottom" && car.x > 980) {
-            car.x = -100; // Respawns cleanly at a fixed point to prevent random overlapping
-            car.speed = car.baseSpeed;
+        // Recycle off-screen objects back into the loop pool
+        if (car.lane === "top") {
+            if (car.x < -80) car.x = 950 + Math.random() * 150;
+        } else {
+            if (car.x > 980) car.x = -100 - Math.random() * 150;
         }
     });
 }
@@ -146,6 +139,7 @@ function updateCars() {
    2. GEOMETRY STAGE (Defining vertices, shapes, coordinates, and primitives)
    ========================================================================= */
 
+// Define Road Geometric Layout Structures
 function buildRoadGeometry() {
     // Main Horizontal asphalt body
     ctx.fillStyle = "#3d3d3d";
@@ -166,6 +160,7 @@ function buildRoadGeometry() {
     }
 }
 
+// Generate Vehicle Outlines and Wheel Placements
 function buildCarGeometry(car) {
     // Chassis Frame Primitive
     ctx.fillStyle = car.color;
@@ -181,18 +176,23 @@ function buildCarGeometry(car) {
 
     // Wheel Accents Primitives
     ctx.fillStyle = "#1e272e";
-    ctx.fillRect(car.x + 8, car.y - 4, 10, 4);
-    ctx.fillRect(car.x + car.w - 18, car.y - 4, 10, 4);
-    ctx.fillRect(car.x + 8, car.y + car.h, 10, 4);
-    ctx.fillRect(car.x + car.w - 18, car.y + car.h, 10, 4);
+    ctx.beginPath();
+    ctx.arc(car.x + 12, car.y + car.h, 5, 0, Math.PI * 2);
+    ctx.arc(car.x + car.w - 12, car.y + car.h, 5, 0, Math.PI * 2);
+    ctx.arc(car.x + 12, car.y, 5, 0, Math.PI * 2);
+    ctx.arc(car.x + car.w - 12, car.y, 5, 0, Math.PI * 2);
+    ctx.fill();
 }
 
+// Define UI Button Geometry & Canvas Interactions
 function buildButtonGeometry(btn) {
+    // Check if mouse vector coordinates lie within button polygon boundary
     const isHovered = mouseX >= btn.x && mouseX <= btn.x + btn.w &&
                       mouseY >= btn.y && mouseY <= btn.y + btn.h;
 
+    // Change visual states via application input tracking
     if (btn.label === "START" && isStarted) {
-        ctx.fillStyle = "#b2bec3"; 
+        ctx.fillStyle = "#b2bec3"; // De-emphasize once started
     } else {
         ctx.fillStyle = isHovered ? "#00cec9" : "#0984e3";
     }
@@ -218,10 +218,11 @@ function buildButtonGeometry(btn) {
 
 
 /* =========================================================================
-   3. RASTERIZATION STAGE (GPU Pixel Output)
+   3. RASTERIZATION STAGE (GPU Conversion: Transforming Primitives into Screen Pixels)
    ========================================================================= */
 
 function rasterizeFrame() {
+    // Clear screen pixels across the canvas bounding box viewport frame
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
     // Rasterize structural background layout
@@ -264,37 +265,40 @@ function rasterizeFrame() {
     ctx.strokeStyle = "#000000";
     ctx.stroke();
 
-    // Rasterize UI Panel Controls inside Canvas Viewport
+    // Rasterize Interactive Panel Controller Buttons UI inside Canvas Viewport
     buildButtonGeometry(startBtnGraphic);
     buildButtonGeometry(pauseBtnGraphic);
 }
 
 
 /* =========================================================================
-   4. ENGINE SIMULATION CORE LOOP
+   4. ENGINE SIMULATION CORE CONTROLLER LOOP
    ========================================================================= */
 
 function coreExecutionLoop() {
     if (isRunning) {
-        updateSimulation(); 
+        updateSimulation(); // Application Data Processing Step
     }
-    rasterizeFrame();      
+    rasterizeFrame();      // Paint pipeline buffer onto HTML UI layer
 
     frameId = requestAnimationFrame(coreExecutionLoop);
 }
 
+// Mouse movement listeners to execute real-time geometry updates for button rendering
 canvas.addEventListener("mousemove", (event) => {
     const rect = canvas.getBoundingClientRect();
     mouseX = event.clientX - rect.left;
     mouseY = event.clientY - rect.top;
     
+    // Force immediate re-render on hover event frames if simulation engine loop is paused
     if (!isRunning) {
         rasterizeFrame();
     }
 });
 
+// Click Interaction Handler Mapping Canvas Coordinates to Controls
 canvas.addEventListener("click", () => {
-    // 1. Clicked START button
+    // 1. Did user click the START button?
     if (mouseX >= startBtnGraphic.x && mouseX <= startBtnGraphic.x + startBtnGraphic.w &&
         mouseY >= startBtnGraphic.y && mouseY <= startBtnGraphic.y + startBtnGraphic.h) {
         
@@ -304,16 +308,16 @@ canvas.addEventListener("click", () => {
         }
     }
 
-    // 2. Clicked PAUSE / RESUME button
+    // 2. Did user click the PAUSE / RESUME button?
     if (mouseX >= pauseBtnGraphic.x && mouseX <= pauseBtnGraphic.x + pauseBtnGraphic.w &&
         mouseY >= pauseBtnGraphic.y && mouseY <= pauseBtnGraphic.y + pauseBtnGraphic.h) {
         
         if (isStarted) {
-            isRunning = !isRunning; 
+            isRunning = !isRunning; // Toggle execution state flag
         }
     }
 });
 
-// Initial invocation setup phase
+// Initial Render invocation setup phase
 rasterizeFrame();
 coreExecutionLoop();
